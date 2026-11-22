@@ -1,42 +1,41 @@
 // Honey — the picture that tastes of one ingredient.
-// main.ts (Node 22, standard library only): writes the entry picture to
-// /output/entry.png. The picture itself is entry.png beside this file: a
-// macro photograph of golden honey dripping from a wooden dipper onto raw
-// honeycomb, made in this session for this one ingredient. The program's
-// job is to place that picture, byte for byte, where the grader looks for
-// it, and to do it the same way on every run.
+//
+// main.ts hands the finished picture to the harness:
+//   node main.ts            (Node 22, standard library only, no network)
+// It reads entry.png from beside this file and writes it whole to
+// $MAKEFUN_OUTPUT_DIR/entry.png, so the two runs the grader makes are
+// byte for byte the same picture.
+//
+// The output directory is a mounted directory on the grader, so it is
+// emptied by removing its contents one entry at a time, never by
+// removing the directory itself.
 
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { copyFileSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SOURCE = join(HERE, "entry.png");
-const OUT_DIR = process.env.MAKEFUN_OUTPUT_DIR || join(HERE, "output");
-const TARGET = join(OUT_DIR, "entry.png");
+const PICTURE = join(HERE, 'entry.png');
 
-// Empty a directory's contents without removing the directory itself:
-// the grader's /output is a mounted directory, and removing the mount
-// point fails. Every entry inside is removed, one at a time.
 function emptyDir(dir: string): void {
   mkdirSync(dir, { recursive: true });
   for (const name of readdirSync(dir)) {
-    const p = join(dir, name);
-    rmSync(p, { recursive: true, force: true });
+    rmSync(join(dir, name), { recursive: true, force: true });
   }
 }
 
-// The run is deterministic: the same source picture, copied whole, gives
-// the same bytes in /output/entry.png on every run, with no clock, no
-// random draw and no network anywhere in the path.
 function main(): void {
-  if (!existsSync(SOURCE)) {
-    throw new Error("entry.png is missing beside main.ts");
+  const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? join(HERE, 'out');
+  emptyDir(outDir);
+  // The picture must be there before we hand anything in; a missing
+  // file is a build error, not an empty entry.
+  if (!statSync(PICTURE, { throwIfNoEntry: false })) {
+    throw new Error(`missing picture: ${PICTURE}`);
   }
-  emptyDir(OUT_DIR);
-  copyFileSync(SOURCE, TARGET);
-  const bytes = statSync(TARGET).size;
-  console.log(`Honey handed in: entry.png (${bytes} bytes) is in ${OUT_DIR}`);
+  const target = join(outDir, 'entry.png');
+  copyFileSync(PICTURE, target);
+  const bytes = statSync(target).size;
+  console.log(`Honey handed in: entry.png (${bytes} bytes) is in ${outDir}`);
 }
 
 main();
